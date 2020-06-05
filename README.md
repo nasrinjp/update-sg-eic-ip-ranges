@@ -19,5 +19,5 @@ sam build
 To deploy, execute the following command.
 
 ```
-sam deploy --capabilities CAPABILITY_NAMED_IAM
+sam deploy --guided
 ```
