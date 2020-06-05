@@ -1,0 +1,82 @@
+AWSTemplateFormatVersion: 2010-09-09
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  Update SG to the latest EC2_INSTANCE_CONNECT ip ranges.
+Globals:
+  Function:
+    Timeout: 60
+
+Parameters:
+  MaintenanceSg:
+    Type: String
+  SgEntryDescription:
+    Type: String
+    Default: "EC2_INSTANCE_CONNECT ip ranges"
+  Schedule:
+    Type: String
+    Default: "cron(0 0 * * ? *)"
+
+Resources:
+  UpdateSgFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: functions
+      Handler: update-sg-to-latest-eic.lambda_handler
+      Runtime: python3.8
+      Description: "Update SG to the latest EC2_INSTANCE_CONNECT ip ranges."
+      Environment:
+        Variables:
+          maintenance_sg: !Ref MaintenanceSg
+          sg_entry_description: !Ref SgEntryDescription
+      Events:
+        CWEvent:
+          Type: Schedule
+          Properties:
+            Schedule: !Ref Schedule
+      Role: !GetAtt UpdateSgLambdaRole.Arn
+
+  UpdateSgLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+
+  UpdateSgLambdaPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Action: logs:CreateLogGroup
+            Resource: !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*
+          - Effect: Allow
+            Action:
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+            Resource:
+              - !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${UpdateSgFunction}:*
+          - Effect: Allow
+            Action:
+              - ec2:AuthorizeSecurityGroupIngress
+              - ec2:RevokeSecurityGroupIngress
+              - ec2:DescribeSecurityGroups
+            Resource:
+              - "*"
+      PolicyName: !Sub ${AWS::StackName}-${UpdateSgFunction}-policy
+      Roles:
+        - !Ref UpdateSgLambdaRole
+
+Outputs:
+  UpdateSgFunction:
+    Description: "Manage Tag Lambda Function ARN"
+    Value: !GetAtt UpdateSgFunction.Arn
+    Export:
+      Name: !Sub ${AWS::StackName}-UpdateSgFunctionArn
